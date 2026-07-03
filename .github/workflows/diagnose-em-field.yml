@@ -44,12 +44,14 @@ jobs:
           export ACC_ENABLE_PROFILING="N"
           export ACC_SET_GMAKE_JOBS="$(nproc)"
           EOF
-          source ./util/dist_source_me
+          # dist_source_me returns non-zero, so source it with -e off (matches run_tests.sh)
+          set +e; source ./util/dist_source_me; set -e
           ./util/dist_build_debug
+          test -x debug/bin/mat6_calc_method_test   # fail the step if the binary was not built
 
       - name: Reproduce + pinpoint (Valgrind)
         run: |
-          source ./util/dist_source_me
+          set +e; source ./util/dist_source_me; set -e
           cd regression_tests/mat6_calc_method_test
           BIN="$GITHUB_WORKSPACE/debug/bin/mat6_calc_method_test" \
             ../../.github/scripts/diagnose_em_field_uninit.sh | tee "$GITHUB_STEP_SUMMARY"
