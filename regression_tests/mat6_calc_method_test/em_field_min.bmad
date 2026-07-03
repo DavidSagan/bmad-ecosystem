@@ -1,0 +1,16 @@
+! Minimal lattice for diagnosing the intermittent EM_FIELD1 failure in
+! mat6_calc_method_test (PR #2044).  It exercises ONLY the em_field element
+! with its gen_grad_map, so the only PTC code entered is the "pancake" build
+! and tracking path -- which keeps Valgrind output focused on the offending
+! uninitialised-memory read.  See scripts/diagnose_em_field_uninit.sh.
+
+parameter[geometry] = open
+parameter[particle]  = electron
+parameter[p0c]       = 1e7
+beginning[beta_a]    = 10
+beginning[beta_b]    = 10
+
+em_field1: em_field, l = 1.4, call::gg.bmad, tracking_method = symp_lie_ptc, mat6_calc_method = taylor
+
+lat: line = (em_field1)
+use, lat
