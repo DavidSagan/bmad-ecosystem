@@ -1,0 +1,63 @@
+name: Diagnose EM_FIELD1 uninitialised-memory bug (#2044)
+
+# Manual, on-demand job.  Builds Bmad in DEBUG (so binaries carry -g and
+# -fbounds-check) and runs mat6_calc_method_test's em_field element under
+# Valgrind to pinpoint the intermittent uninitialised-heap read in the PTC
+# "pancake" code path.  See .github/scripts/diagnose_em_field_uninit.sh.
+
+on:
+  workflow_dispatch:
+
+env:
+  EXTERNAL_PACKAGES_VERSION: main
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-dependencies
+        with:
+          external-packages-version: ${{ env.EXTERNAL_PACKAGES_VERSION }}
+
+      - name: Install Valgrind
+        run: sudo apt-get install -y valgrind
+
+      - name: Build Bmad (debug)
+        run: |
+          cat <<EOF >>./util/dist_prefs
+          export DIST_F90_REQUEST="gfortran"
+          export ACC_PLOT_PACKAGE="pgplot"
+          export ACC_PLOT_DISPLAY_TYPE="X"
+          export ACC_ENABLE_OPENMP="N"
+          export ACC_ENABLE_MPI="N"
+          export ACC_FORCE_BUILTIN_MPI="Y"
+          export ACC_ENABLE_GFORTRAN_OPTIMIZATION="N"
+          export ACC_ENABLE_SHARED="N"
+          export ACC_ENABLE_SHARED_ONLY="Y"
+          export ACC_ENABLE_FPIC="Y"
+          export ACC_ENABLE_PROFILING="N"
+          export ACC_SET_GMAKE_JOBS="$(nproc)"
+          EOF
+          source ./util/dist_source_me
+          ./util/dist_build_debug
+
+      - name: Reproduce + pinpoint (Valgrind)
+        run: |
+          source ./util/dist_source_me
+          cd regression_tests/mat6_calc_method_test
+          BIN="$GITHUB_WORKSPACE/debug/bin/mat6_calc_method_test" \
+            ../../.github/scripts/diagnose_em_field_uninit.sh | tee "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload full Valgrind log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: valgrind-em-field-log
+          path: regression_tests/mat6_calc_method_test/valgrind_em_field.log
+          if-no-files-found: warn
